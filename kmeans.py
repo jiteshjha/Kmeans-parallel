@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.datasets.samples_generator import make_blobs
 
 def euclidean(XA, XB):
     """Returns the distance between points using
@@ -118,19 +119,18 @@ def kmeans(data, k=None, centroids=None, steps=100):
     return clusters, centroids
 
 if __name__ == '__main__':
-    data = np.array([[12, 10, 87],
-        [ 2, 12, 33],
-        [68, 31, 32],
-        [88, 13, 66],
-        [79, 40, 89],
-        [ 1, 77, 12]])
 
-    np.random.seed(60)
+    # Generate sample data
+    centers = [[1, 1], [-1, -1], [1, -1]]
 
-    result = kmeans(data, k=3)
+    X, labels_true = make_blobs(n_samples=300, centers=centers, cluster_std=0.5,
+		                    random_state=0)
+
+    result = kmeans(X, k=10)
     
-    print "Result:\nClusters"
+    # Print result
+    print "Result:\n\nClusters"
     print result[0]
 
-    print "Centroids"
+    print "\nCentroids"
     print result[1]
