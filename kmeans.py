@@ -140,7 +140,6 @@ if __name__ == '__main__':
 		                    random_state=0)
 
     result = kmeans(X, k=10)
-
     dot_graph(result[0].dask, filename='clusters')
     dot_graph(result[1].dask, filename='centroids')
     
