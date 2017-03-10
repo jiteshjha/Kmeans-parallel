@@ -16,6 +16,8 @@ Sample Instruction to begin with:
     from dask.dot import dot_graph
     from sklearn import metrics
 
+    from kmeans import kmeans
+
     # Generate sample data
     centers = [[1, 1], [-1, -1], [1, -1]]
 
