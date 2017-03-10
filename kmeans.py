@@ -1,7 +1,11 @@
 import numpy as np
 from sklearn.datasets.samples_generator import make_blobs
+import dask.array as da
+from dask.dot import dot_graph
+from sklearn import metrics
 
 def euclidean(XA, XB):
+    
     """Returns the distance between points using
        Euclidean distance (2-norm) as the distance metric between the
        points.
@@ -18,17 +22,20 @@ def euclidean(XA, XB):
             [ 1.8856,  3.3561,  2.8477,  0.    ]])
 
     """
-    mA = XA.shape
-    mB = XB.shape
+    mA = (XA.shape)[0]
+    mB = (XB.shape)[0]
 
-    dm = np.zeros(shape = (mA[0], mB[0]), dtype=np.double)
+    distances = []
 
-    for i in xrange(0, mA[0]):
-        for j in xrange(0, mB[0]):
+    for i in xrange(0, mA):
+        dm = np.zeros(shape = (1, mB), dtype=np.double)
+        for j in xrange(0, mB):
             XA_XB = XA[i, :] - XB[j, :]
-            dm[i, j] = np.sqrt(np.dot(XA_XB, XA_XB))
+            dm[0, j] = da.sqrt(da.dot(XA_XB, XA_XB))
 
-    return dm
+        distances.append(da.from_array(dm, chunks = (mA + mB)/4)) 
+
+    return da.concatenate(distances, axis= 0)
 
 def cluster_centroids(data, clusters, k=None):
     """Return centroids of clusters & clusters in data.
@@ -58,13 +65,13 @@ def cluster_centroids(data, clusters, k=None):
 
     """
     if k is None:
-        k = np.max(clusters) + 1
-    result = np.empty(shape=(k,) + data.shape[1:])
-    for i in range(k):
-        np.mean(data[clusters == i], axis=0, out=result[i])
-    return result
+        k = (da.max(clusters)).compute() + 1
 
-import scipy.spatial
+    result = []
+
+    result = [da.mean(data[clusters.compute() == i], axis=0) for i in xrange(k)]
+    
+    return da.reshape(da.concatenate(result, axis=0), shape=(k,) + data.shape[1:])
 
 def kmeans(data, k=None, centroids=None, steps=100):
     """Divide the observations in data into clusters using the k-means
@@ -103,34 +110,45 @@ def kmeans(data, k=None, centroids=None, steps=100):
     else:
         raise RuntimeError("Need a value for k or centroids.")
 
+    da_data = da.from_array(data, chunks = k)
+    da_centroids = da.from_array(centroids, chunks = k)
+
+    i = 0
     for _ in range(max(steps, 1)):
+        print "Iteration : ", i
+        i += 1
         # Squared distances between each point and each centroid.
-        sqdists = euclidean(centroids, data)
+        sqdists = euclidean(da_centroids, da_data)
 
         # Index of the closest centroid to each data point.
-        clusters = np.argmin(sqdists, axis=0)
+        da_clusters = da.argmin(sqdists, axis=0)
 
-        new_centroids = cluster_centroids(data, clusters, k)
-        if np.array_equal(new_centroids, centroids):
+        da_new_centroids = cluster_centroids(da_data, da_clusters, k)
+        if np.array_equal(da_new_centroids.compute(), da_centroids.compute()):
             break
 
-        centroids = new_centroids
+        da_centroids = da_new_centroids
 
-    return clusters, centroids
+    return da_clusters, da_centroids
 
 if __name__ == '__main__':
 
     # Generate sample data
     centers = [[1, 1], [-1, -1], [1, -1]]
 
-    X, labels_true = make_blobs(n_samples=300, centers=centers, cluster_std=0.5,
+    X, labels_true = make_blobs(n_samples=30, centers=centers, cluster_std=0.5,
 		                    random_state=0)
 
     result = kmeans(X, k=10)
-    
-    # Print result
-    print "Result:\n\nClusters"
-    print result[0]
 
-    print "\nCentroids"
-    print result[1]
+    dot_graph(result[0].dask, filename='clusters')
+    dot_graph(result[1].dask, filename='centroids')
+    
+    print "Result:\nClusters"
+    print result[0].compute()
+
+    print "Centroids"
+    print result[1].compute()
+
+    print("Silhouette Coefficient: %0.3f"
+      % metrics.silhouette_score(X.tolist(), result[0].compute().tolist(), metric='euclidean'))
