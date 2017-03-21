@@ -3,6 +3,7 @@ from sklearn.datasets.samples_generator import make_blobs
 import dask.array as da
 from dask.dot import dot_graph
 from sklearn import metrics
+import multiprocessing
 
 def euclidean(XA, XB):
     
@@ -33,7 +34,7 @@ def euclidean(XA, XB):
             XA_XB = XA[i, :] - XB[j, :]
             dm[0, j] = da.sqrt(da.dot(XA_XB, XA_XB))
 
-        distances.append(da.from_array(dm, chunks = (mA + mB)/4)) 
+        distances.append(da.from_array(dm, chunks = (mA + mB)/multiprocessing.cpu_count())) 
 
     return da.concatenate(distances, axis= 0)
 
@@ -110,8 +111,8 @@ def kmeans(data, k=None, centroids=None, steps=100):
     else:
         raise RuntimeError("Need a value for k or centroids.")
 
-    da_data = da.from_array(data, chunks = k)
-    da_centroids = da.from_array(centroids, chunks = k)
+    da_data = da.from_array(data, chunks = multiprocessing.cpu_count())
+    da_centroids = da.from_array(centroids, chunks = multiprocessing.cpu_count())
 
     i = 0
     for _ in range(max(steps, 1)):
@@ -136,7 +137,7 @@ if __name__ == '__main__':
     # Generate sample data
     centers = [[1, 1], [-1, -1], [1, -1]]
 
-    X, labels_true = make_blobs(n_samples=30, centers=centers, cluster_std=0.5,
+    X, labels_true = make_blobs(n_samples=50, centers=centers, cluster_std=0.5,
 		                    random_state=0)
 
     result = kmeans(X, k=10)
